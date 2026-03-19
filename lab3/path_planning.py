@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 # This assignment implements Dijkstra's shortest path on a graph, finding an unvisited node in a graph,
 #   picking which one to visit, and taking a path in the map and generating waypoints along that path
 #
@@ -8,10 +9,14 @@
 #   Four and Eight connected neighbors
 #
 # Slides https://docs.google.com/presentation/d/1XBPw2B2Bac-LcXH5kYN4hQLLLl_AMIgoowlrmPpTinA/edit?usp=sharing
+
 # The ever-present numpy
 import numpy as np
+
 # Our priority queue
 import heapq
+
+
 # -------------- Showing start and end and path ---------------
 def plot_with_path(im_threshhold, zoom=1.0, robot_loc=None, goal_loc=None, path=None):
     """Show the map plus, optionally, the robot location and goal location and proposed path
@@ -21,13 +26,17 @@ def plot_with_path(im_threshhold, zoom=1.0, robot_loc=None, goal_loc=None, path=
     @param robot_loc - the location of the robot in pixel coordinates
     @param goal_loc - the location of the goal in pixel coordinates
     @param path - the proposed path in pixel coordinates"""
+
     # Putting this in here to avoid messing up ROS
     import matplotlib.pyplot as plt
+
     fig, axs = plt.subplots(1, 1)
     axs.imshow(im_threshhold, origin='lower', cmap="gist_gray")
     axs.set_title("threshold image")
+
     # Double checking lower left corner
     axs.plot(10, 5, 'xy', markersize=5)
+
     # Show original and thresholded image
     if robot_loc is not None:
         axs.plot(robot_loc[0], robot_loc[1], '+r', markersize=10)
@@ -38,11 +47,15 @@ def plot_with_path(im_threshhold, zoom=1.0, robot_loc=None, goal_loc=None, path=
             axs.plot([p[0], q[0]], [p[1], q[1]], '-y', markersize=2)
             axs.plot(p[0], p[1], '.y', markersize=2)
     axs.axis('equal')
+
     # Implements a zoom - set zoom to 1.0 if no zoom
     width = im_threshhold.shape[1]
     height = im_threshhold.shape[0]
+
     axs.set_xlim(width / 2 - zoom * width / 2, width / 2 + zoom * width / 2)
     axs.set_ylim(height / 2 - zoom * height / 2, height / 2 + zoom * height / 2)
+
+
 # -------------- Thresholded image True/False ---------------
 def is_wall(im, pix=(0, 0)):
     """ Is the pixel a wall pixel?
@@ -52,6 +65,8 @@ def is_wall(im, pix=(0, 0)):
     if im[pix[1], pix[0]] == 0:
         return True
     return False
+
+
 def is_unseen(im, pix=(0, 0)):
     """ Is the pixel one we've seen?
     @param im - the image
@@ -60,6 +75,8 @@ def is_unseen(im, pix=(0, 0)):
     if im[pix[1], pix[0]] == 128:
         return True
     return False
+
+
 def is_free(im, pix=(0,0)):
     """ Is the pixel empty?
     @param im - the image
@@ -68,14 +85,18 @@ def is_free(im, pix=(0,0)):
     if im[pix[1], pix[0]] == 255:
         return True
     return False
+
+
 def convert_image(im, wall_threshold, free_threshold):
     """ Convert the image to a thresholded image with 'not seen' pixels marked
     @param im - width by height image as numpy (depends on input)
     @param wall_threshold - number between 0 and 1 to indicate wall threshold value
     @param free_threshold - number between 0 and 1 to indicate free space threshold value
     @return an image of the same WXH but with 0 (free) 255 (wall) 128 (unseen)"""
+
     # Assume all is unseen - fill the image with 128
     im_ret = np.zeros((im.shape[0], im.shape[1]), dtype='uint8') + 128
+
     im_avg = im
     if len(im.shape) == 3:
         # RGB image - convert to gray scale
@@ -87,6 +108,8 @@ def convert_image(im, wall_threshold, free_threshold):
     im_ret[im_avg < wall_threshold] = 0
     im_ret[im_avg > free_threshold] = 255
     return im_ret
+
+
 # -------------- Getting 4 or 8 neighbors ---------------
 def four_connected(pix=(0, 0)):
     """ Generator function for 4 neighbors
@@ -98,6 +121,8 @@ def four_connected(pix=(0, 0)):
     for indx in [-1, 1]:
         ret = pix[0], pix[1] + indx
         yield ret
+
+
 def eight_connected(pix=(0, 0)):
     """ Generator function for 8 neighbors
     @param im - the image
@@ -109,12 +134,15 @@ def eight_connected(pix=(0, 0)):
                 pass
             ret = pix[0] + indx, pix[1] + j
             yield ret
+
+
 def dijkstra(im, robot_loc=(0, 0), goal_loc=(0, 0)):
     """ Occupancy grid image, with robot and goal loc as pixels
     @param im - the thresholded image - use is_free(i, j) to determine if in reachable node
     @param robot_loc - where the robot is (i,j)
     @param goal_loc - where to go to (i,j)
     @returns a list of tuples"""
+
     # Sanity checks for ROS 2 assignment - these will trigger try-catch errors in the ros2 lab3 assignment
     if not (0 <= robot_loc[0] < im.shape[1] and 0 <= robot_loc[1] < im.shape[0]):
         raise IndexError(f"ERROR: Robot location {robot_loc} is not in map {im.shape}")
@@ -123,6 +151,7 @@ def dijkstra(im, robot_loc=(0, 0), goal_loc=(0, 0)):
     
     if not is_free(im, robot_loc):
         raise ValueError(f"ERROR: Start location {robot_loc} is not in the free space of the map")
+
     if not is_free(im, goal_loc):
         raise ValueError(f"ERROR: Goal location {goal_loc} is not in the free space of the map")
  
@@ -133,6 +162,7 @@ def dijkstra(im, robot_loc=(0, 0), goal_loc=(0, 0)):
     #   push takes the queue itself, then a tuple with the first element the priority value and the second
     #   being whatever data you want to keep - in this case, the robot location, which is a tuple
     heapq.heappush(priority_queue, (0, robot_loc))
+
     # The power of dictionaries - we're going to use a dictionary to store every node we've visited, along
     #   with the node we came from and the current distance
     # This is easier than trying to get the distance from the heap
@@ -141,6 +171,7 @@ def dijkstra(im, robot_loc=(0, 0), goal_loc=(0, 0)):
     #   Store the best distance found so far, the parent node, and if it is closed y/n
     # Push the first node onto the heap - distance is zero, it has no parent, and it is NOT closed
     visited[robot_loc] = (0, None, False)   # For every other node this will be the current_node, distance, False
+
     # While the list is not empty 
     # Use a break statement to end the while loop if you encounter the goal node before the queue empties
     while priority_queue:
@@ -149,11 +180,13 @@ def dijkstra(im, robot_loc=(0, 0), goal_loc=(0, 0)):
         # Pop returns the value and the i, j
         distance_to_current_node = current_node[0]
         current_node_ij = current_node[1]  # i,j index of current node
+
         # Showing how to get this data back out of visited
         visited_triplet = visited[current_node_ij]  # This is a tuple with three values
         visited_distance = visited_triplet[0]       # First value is the current distance stored for that node
         visited_parent = visited_triplet[1]         # Second value is the parent node of this one
         visited_closed_yn = visited_triplet[2]      # Third value is if this node is closed y/n
+
         # GUIDE
         #  Step 1: Break out of the loop if current_node_ij is the goal node
         #  Step 2: If this node is closed, skip it
@@ -169,66 +202,69 @@ def dijkstra(im, robot_loc=(0, 0), goal_loc=(0, 0)):
 
         visited[current_node_ij] = (visited_distance, visited_parent, True)
 
-        for nb in eight_connected(current_node_ij):
-            if not (0 <= nb[0] < im.shape[1] and 0 <= nb[1] < im.shape[0]):
+        for neighbor in eight_connected(current_node_ij):
+            if not (0 <= neighbor[0] < im.shape[1] and 0 <= neighbor[1] < im.shape[0]):
                 continue
-            if not is_free(im, nb):
+
+            if not is_free(im, neighbor):
                 continue
-            dx = abs(nb[0] - current_node_ij[0])
-            dy = abs(nb[1] - current_node_ij[1])
-            step_cost = 1.41421356 if (dx == 1 and dy == 1) else 1.0
-            new_dist = visited_distance + step_cost
-            if nb not in visited:
-                visited[nb] = (new_dist, current_node_ij, False)
-                heapq.heappush(priority_queue, (new_dist, nb))
+
+            step_distance = np.sqrt((neighbor[0] - current_node_ij[0])**2 + (neighbor[1] - current_node_ij[1])**2)
+            new_distance = visited_distance + step_distance
+
+            if neighbor not in visited:
+                visited[neighbor] = (new_distance, current_node_ij, False)
+                heapq.heappush(priority_queue, (new_distance, neighbor))
             else:
-                old_dist, old_parent, old_closed = visited[nb]
-                if new_dist < old_dist:
-                    visited[nb] = (new_dist, current_node_ij, old_closed)
-                    heapq.heappush(priority_queue, (new_dist, nb))
+                old_distance, old_parent, old_closed = visited[neighbor]
+                if not old_closed and new_distance < old_distance:
+                    visited[neighbor] = (new_distance, current_node_ij, False)
+                    heapq.heappush(priority_queue, (new_distance, neighbor))
 
     # Now check that we actually found the goal node
     if not goal_loc in visited:
-        print(f"Goal {goal_loc} not reached, taking closest")
+        #print(f"Goal {goal_loc} not reached, taking closest");
+
         # GUIDE: Deal with not being able to get to the goal loc
         #   If the goal location is not reachable, find the node closest to the goal 
         #.  and return the path to it - you'll want this for the ROS 2 assignment
         # YOUR CODE HERE
-        closest = None
-        best_d = 1e30
-        for node in visited.keys():
-            if not is_free(im, node):
-                continue
-            d = (node[0] - goal_loc[0])**2 + (node[1] - goal_loc[1])**2
-            if d < best_d:
-                best_d = d
-                closest = node
-        if closest is None:
-            return [robot_loc]
-        goal_loc = closest
+        closest_node = None
+        closest_distance = None
+
+        for node in visited:
+            dist_to_goal = np.sqrt((node[0] - goal_loc[0])**2 + (node[1] - goal_loc[1])**2)
+            if closest_node is None or dist_to_goal < closest_distance:
+                closest_node = node
+                closest_distance = dist_to_goal
+
+        goal_loc = closest_node
 
     path = []
-    path.append(goal_loc)
+
     # GUIDE: Build the path by starting at the goal node and working backwards
     # YOUR CODE HERE
-    cur = goal_loc
-    while cur != robot_loc:
-        parent = visited[cur][1]
-        if parent is None:
-            break
-        path.append(parent)
-        cur = parent
-    path.reverse()
+    current_node = goal_loc
+    while current_node is not None:
+        path.append(current_node)
+        current_node = visited[current_node][1]
+
+    path.reverse();
+
 
     return path
+
+
 def open_image(im_name):
     """ A helper function to open up the image and the yaml file and threshold
     @param im_name - name of image in Data directory
     @returns image anbd thresholded image"""
+
     # Using imageio to read in the image
     import imageio.v2 as imageio
     # yaml for file format
     import yaml as yaml
+
     # Needed for reading in map info
     import os
     fnames = ["Data/" + im_name, 
@@ -253,8 +289,11 @@ def open_image(im_name):
             free_threshold = dict["free_thresh"]
     except:
         pass
+
     im_thresh = convert_image(im, wall_threshold, free_threshold)
     return im, im_thresh
+
+
 def check_path_continuous(im, path, expected_len_four, expected_len_eight):
     """ Checks that the path is continuous and in free space"""
     b_is_eight = False
@@ -266,6 +305,7 @@ def check_path_continuous(im, path, expected_len_four, expected_len_eight):
             pass_connected_test = False
         if abs(p1[0] - p2[0]) > 0 and abs(p1[1] - p2[1]):
             b_is_eight = True
+
     pass_len_test = False
     expected_len = expected_len_eight if b_is_eight else expected_len_four
     if abs(len(path) - expected_len) < 3:
@@ -275,6 +315,7 @@ def check_path_continuous(im, path, expected_len_four, expected_len_eight):
     for pt in path:
         if not is_free(im, pt):
             pass_free_test = False
+
     if not pass_connected_test:
         print(f"Failed connected test")
         return False
@@ -289,6 +330,8 @@ def check_path_continuous(im, path, expected_len_four, expected_len_eight):
             print(f" Assumed 4 connected")
         return False
     return True
+
+
 if __name__ == '__main__':
     
     # Use one of these
@@ -297,24 +340,32 @@ if __name__ == '__main__':
     robot_goal_hallway = (80, 175)
     robot_goal_next_room = (130, 50)
     loc_not_reachable = (115, 145)
+
     # Opens and threshold the SLAM map image
     _, im_thresh = open_image("map.pgm")
     zoom = 1.0
+
     robot_goal_loc = robot_goal_loc_close
     path = dijkstra(im_thresh, robot_start_loc, robot_goal_loc)
     plot_with_path(im_thresh, zoom=zoom, robot_loc=robot_start_loc, goal_loc=robot_goal_loc, path=path)
+
     path_straight = dijkstra(im_thresh, robot_loc=(40, 60), goal_loc=robot_goal_loc_close)
     assert check_path_continuous(im_thresh, path_straight, 41, 21)
+
     path_hallway = dijkstra(im_thresh, robot_loc=(40, 60), goal_loc=robot_goal_hallway)
     assert check_path_continuous(im_thresh, path_hallway, 156, 116)
+
     path_next_room = dijkstra(im_thresh, robot_loc=(40, 60), goal_loc=robot_goal_next_room)
     assert check_path_continuous(im_thresh, path_next_room, 315, 241)
+
     # This one will be SLOW
     path_not_reachable = dijkstra(im_thresh, robot_loc=(40, 60), goal_loc=loc_not_reachable)
     assert len(path_not_reachable) > 20
+
     # Depending on if your mac, windows, linux, and if interactive is true, you may need to call this to get the plt
     # windows to show
     # Putting this in here to avoid messing up ROS
     import matplotlib.pyplot as plt
     plt.show()
+
     print("Done")
