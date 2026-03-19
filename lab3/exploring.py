@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 # This assignment lets you both define a strategy for picking the next point to explore and determine how you
 #  want to chop up a full path into way points. You'll need path_planning.py as well (for calculating the paths)
 #
@@ -12,14 +13,18 @@
 #   Some structure for keeping/changing waypoints and converting to/from the map to the robot's coordinate space
 #
 # Slides
+
 # The ever-present numpy
 import numpy as np
 import os
-# Your path planning code
+
+# Your path planning code 
 try:
     import lab3.path_planning as path_planning
 except:
     import path_planning as path_planning
+
+
 # -------------- Showing start and end and path ---------------
 def plot_with_explore_points(im_threshhold, zoom=1.0, robot_loc=None, explore_points=None, best_pt=None):
     """Show the map plus, optionally, the robot location and points marked as ones to explore/use as end-points
@@ -28,25 +33,33 @@ def plot_with_explore_points(im_threshhold, zoom=1.0, robot_loc=None, explore_po
     @param robot_loc - the location of the robot in pixel coordinates
     @param best_pt - The best explore point (tuple, i,j)
     @param explore_points - the proposed places to explore, as a list"""
+
     # Putting this in here to avoid messing up ROS
     import matplotlib.pyplot as plt
+
     fig, axs = plt.subplots(1, 1)
     axs.imshow(im_threshhold, origin='lower', cmap="gist_gray")
     axs.set_title("threshold image")
+
     # Show original and thresholded image
     if explore_points is not None:
         for p in explore_points:
             axs.plot(p[0], p[1], '.b', markersize=2)
+
     if robot_loc is not None:
         axs.plot(robot_loc[0], robot_loc[1], '+r', markersize=10)
     if best_pt is not None:
         axs.plot(best_pt[0], best_pt[1], '*y', markersize=10)
     axs.axis('equal')
+
     # Implements a zoom - set zoom to 1.0 if no zoom
     width = im_threshhold.shape[1]
     height = im_threshhold.shape[0]
+
     axs.set_xlim(width / 2 - zoom * width / 2, width / 2 + zoom * width / 2)
     axs.set_ylim(height / 2 - zoom * height / 2, height / 2 + zoom * height / 2)
+
+
 # -------------- For converting to the map and back ---------------
 def convert_pix_to_x_y(im_size, pix, size_pix):
     """Convert a pixel location [0..W-1, 0..H-1] to a map location (see slides)
@@ -57,7 +70,10 @@ def convert_pix_to_x_y(im_size, pix, size_pix):
     @return x,y """
     if not (0 <= pix[0] <= im_size[1]) or not (0 <= pix[1] <= im_size[0]):
         raise ValueError(f"Pixel {pix} not in image, image size {im_size}")
+
     return [size_pix * pix[i] / im_size[1-i] for i in range(0, 2)]
+
+
 def convert_x_y_to_pix(im_size, x_y, size_pix):
     """Convert a map location to a pixel location [0..W-1, 0..H-1] in the image/map
     Note: Checks if x_y is valid (in map)
@@ -66,37 +82,59 @@ def convert_x_y_to_pix(im_size, x_y, size_pix):
     @param size_pix - size of pixel in meters
     @return i, j (integers) """
     pix = [int(x_y[i] * im_size[1-i] / size_pix) for i in range(0, 2)]
+
     if not (0 <= pix[0] <= im_size[1]) or not (0 <= pix[1] <= im_size[0]):
         raise ValueError(f"Loc {x_y} not in image, image size {im_size}")
     return pix
+
+
 def is_reachable(im, pix):
     """ Is the pixel reachable, i.e., has a neighbor that is free?
     Used for
     @param im - the image
     @param pix - the pixel i,j"""
+
     # GUIDE: Returns True (the pixel is adjacent to a pixel that is free)
     #  False otherwise
     # You can use four or eight connected - eight will return more points
     # YOUR CODE HERE
-    for nb in path_planning.eight_connected(pix):
-        if 0 <= nb[0] < im.shape[1] and 0 <= nb[1] < im.shape[0]:
-            if path_planning.is_free(im, nb):
+    for pt in path_planning.eight_connected(pix):
+        if 0 <= pt[0] < im.shape[1] and 0 <= pt[1] < im.shape[0]:
+            if path_planning.is_free(im, pt):
                 return True
     return False
+
+
 def find_all_possible_goals(im):
     """ Find all of the places where you have a pixel that is unseen next to a pixel that is free
     It is probably easier to do this, THEN cull it down to some reasonable places to try
     This is because of noise in the map - there may be some isolated pixels
     @param im - thresholded image
     @return list of possible pixel (x,y) locations"""
+
     # YOUR CODE HERE
-    pts = []
-    h, w = im.shape[0], im.shape[1]
-    for y in range(1, h - 1):
-        for x in range(1, w - 1):
-            if path_planning.is_unseen(im, (x, y)) and is_reachable(im, (x, y)):
-                pts.append((x, y))
-    return pts[0::5]
+    free = (im == 255)
+    unseen = (im == 128)
+
+    unseen_neighbor = np.zeros_like(unseen, dtype=bool)
+
+    unseen_neighbor[1:, :] = np.logical_or(unseen_neighbor[1:, :], unseen[:-1, :])
+    unseen_neighbor[:-1, :] = np.logical_or(unseen_neighbor[:-1, :], unseen[1:, :])
+    unseen_neighbor[:, 1:] = np.logical_or(unseen_neighbor[:, 1:], unseen[:, :-1])
+    unseen_neighbor[:, :-1] = np.logical_or(unseen_neighbor[:, :-1], unseen[:, 1:])
+
+    unseen_neighbor[1:, 1:] = np.logical_or(unseen_neighbor[1:, 1:], unseen[:-1, :-1])
+    unseen_neighbor[1:, :-1] = np.logical_or(unseen_neighbor[1:, :-1], unseen[:-1, 1:])
+    unseen_neighbor[:-1, 1:] = np.logical_or(unseen_neighbor[:-1, 1:], unseen[1:, :-1])
+    unseen_neighbor[:-1, :-1] = np.logical_or(unseen_neighbor[:-1, :-1], unseen[1:, 1:])
+
+    possible_mask = np.logical_and(free, unseen_neighbor)
+
+    ys, xs = np.where(possible_mask)
+    possible_points = [(int(x), int(y)) for x, y in zip(xs, ys)]
+
+    return possible_points
+
 def find_best_point(im, possible_points : list, robot_loc):
     """ Pick one of the unseen points to go to
     @param im - thresholded image
@@ -104,52 +142,92 @@ def find_best_point(im, possible_points : list, robot_loc):
     @param robot_loc - location of the robot (in case you want to factor that in)
     """
     # YOUR CODE HERE
-    if possible_points is None or len(possible_points) == 0:
-        return robot_loc
-    best_pt = possible_points[0]
-    best_score = -1e30
-    for p in possible_points:
-        free_count = 0
-        unseen_count = 0
-        for nb in path_planning.eight_connected(p):
-            if 0 <= nb[0] < im.shape[1] and 0 <= nb[1] < im.shape[0]:
-                if path_planning.is_free(im, nb):
-                    free_count += 1
-                elif path_planning.is_unseen(im, nb):
-                    unseen_count += 1
-        dx = p[0] - robot_loc[0]
-        dy = p[1] - robot_loc[1]
-        dist = np.sqrt(dx * dx + dy * dy)
-        score = (free_count * 10.0) + (unseen_count * 1.0) - (dist * 0.05)
-        if score > best_score:
-            best_score = score
-            best_pt = p
-    return best_pt
+    best_point = None
+    best_distance = None
+
+    for pt in possible_points:
+        count_free = 0
+        count_unseen = 0
+        good_point = True
+
+        for ix in range(-1, 2):
+            for iy in range(-1, 2):
+                check_pt = (pt[0] + ix, pt[1] + iy)
+
+                if not (0 <= check_pt[0] < im.shape[1] and 0 <= check_pt[1] < im.shape[0]):
+                    good_point = False
+                    continue
+
+                if path_planning.is_free(im, check_pt):
+                    count_free += 1
+                elif path_planning.is_unseen(im, check_pt):
+                    count_unseen += 1
+                else:
+                    good_point = False
+
+        if count_free < 3:
+            good_point = False
+
+        if count_free + count_unseen != 9:
+            good_point = False
+
+        if good_point:
+            dist = np.sqrt((pt[0] - robot_loc[0])**2 + (pt[1] - robot_loc[1])**2)
+            if best_point is None or dist < best_distance:
+                best_point = pt
+                best_distance = dist
+
+    if best_point is not None:
+        return best_point
+
+    if len(possible_points) > 0:
+        best_point = possible_points[0]
+        best_distance = np.sqrt((best_point[0] - robot_loc[0])**2 + (best_point[1] - robot_loc[1])**2)
+
+        for pt in possible_points:
+            dist = np.sqrt((pt[0] - robot_loc[0])**2 + (pt[1] - robot_loc[1])**2)
+            if dist < best_distance:
+                best_point = pt
+                best_distance = dist
+
+        return best_point
+
+    return robot_loc
+
 def find_waypoints(im, path):
     """ Place waypoints along the path
     @param im - the thresholded image
     @param path - the initial path
     @ return - a new path"""
+
     # Again, no right answer here
     # YOUR CODE HERE
-    if path is None or len(path) == 0:
-        return []
+    if len(path) <= 2:
+        return path
+
     waypoints = [path[0]]
-    if len(path) == 1:
-        return waypoints
-    N = 10
+
     for i in range(1, len(path) - 1):
-        prev = path[i - 1]
-        cur = path[i]
-        nxt = path[i + 1]
-        d1 = (cur[0] - prev[0], cur[1] - prev[1])
-        d2 = (nxt[0] - cur[0], nxt[1] - cur[1])
-        direction_changed = (d1 != d2)
-        every_n = (i % N == 0)
-        if direction_changed or every_n:
-            waypoints.append(cur)
-    waypoints.append(path[-1])
+        prev_pt = path[i - 1]
+        curr_pt = path[i]
+        next_pt = path[i + 1]
+
+        dir1 = (curr_pt[0] - prev_pt[0], curr_pt[1] - prev_pt[1])
+        dir2 = (next_pt[0] - curr_pt[0], next_pt[1] - curr_pt[1])
+
+        if dir1 != dir2:
+            waypoints.append(curr_pt)
+
+    if waypoints[-1] != path[-1]:
+        waypoints.append(path[-1])
+
+    if len(waypoints) > 10:
+        indices = np.linspace(0, len(path) - 1, 10, dtype=int)
+        waypoints = [path[i] for i in indices]
+
     return waypoints
+
+
 def test_unseen(im, pts):
     for pt in pts:
         count_free = 0
@@ -163,6 +241,8 @@ def test_unseen(im, pts):
         if count_free == 0 or count_unseen == 0:
             return False
     return True
+
+
 def test_best(im, pt):
     """ Check that the selected point has at least 3 free neighbors"""
     count_free = 0
@@ -178,20 +258,29 @@ def test_best(im, pt):
     if count_free + count_unseen != 9:
         return False
     return True
+
+
 if __name__ == '__main__':
     _, im_thresh = path_planning.open_image("map.pgm")
+
     robot_start_loc = (60, 40)
+
     all_unseen = find_all_possible_goals(im_thresh)
     best_unseen = find_best_point(im_thresh, all_unseen, robot_loc=robot_start_loc)
+
     assert test_unseen(im=im_thresh, pts=all_unseen)
     assert test_best(im=im_thresh, pt=best_unseen)
+
     plot_with_explore_points(im_thresh, zoom=1.0, robot_loc=robot_start_loc, explore_points=all_unseen, best_pt=best_unseen)
+
     path = path_planning.dijkstra(im_thresh, robot_start_loc, best_unseen)
     waypoints = find_waypoints(im_thresh, path)
     path_planning.plot_with_path(im_thresh, zoom=1.0, robot_loc=robot_start_loc, goal_loc=best_unseen, path=waypoints)
+
     # Depending on if your mac, windows, linux, and if interactive is true, you may need to call this to get the plt
     # windows to show
     # Putting this in here to avoid messing up ROS
     import matplotlib.pyplot as plt
     plt.show()
+
     print("Done")
