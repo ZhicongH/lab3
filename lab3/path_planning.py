@@ -196,61 +196,52 @@ def dijkstra(im, robot_loc=(0, 0), goal_loc=(0, 0)):
         # YOUR CODE HERE
         if current_node_ij == goal_loc:
             break
+        if not visited_closed_yn:
+            visited[current_node_ij] = (visited_distance, visited_parent, True)
 
-        if visited_closed_yn:
-            continue
+            for neighor in four_connected(current_node_ij):
+                if (0 <= neighor[0] < im.shape[1] and 0 <= neighor[1] < im.shape[0]) and is_free(im, neighor):
+                    if is_free(im, neighor):
+                        new_dist = visited_distance + 1
 
-        visited[current_node_ij] = (visited_distance, visited_parent, True)
+                    if neighor not in visited:
+                        visited[neighor] = (new_dist, current_node_ij, False)
+                        heapq.heappush(priority_queue, (new_dist, neighor))
 
-        for neighbor in eight_connected(current_node_ij):
-            if not (0 <= neighbor[0] < im.shape[1] and 0 <= neighbor[1] < im.shape[0]):
-                continue
+                    else:
+                        old_dist, parent, closed = visited[neighor]
 
-            if not is_free(im, neighbor):
-                continue
+                        if (not closed) and (new_dist < old_dist):
+                            visited[neighor] = (new_dist, current_node_ij, False)
+                            heapq.heappush(priority_queue, (new_dist, neighor))
 
-            step_distance = np.sqrt((neighbor[0] - current_node_ij[0])**2 + (neighbor[1] - current_node_ij[1])**2)
-            new_distance = visited_distance + step_distance
-
-            if neighbor not in visited:
-                visited[neighbor] = (new_distance, current_node_ij, False)
-                heapq.heappush(priority_queue, (new_distance, neighbor))
-            else:
-                old_distance, old_parent, old_closed = visited[neighbor]
-                if not old_closed and new_distance < old_distance:
-                    visited[neighbor] = (new_distance, current_node_ij, False)
-                    heapq.heappush(priority_queue, (new_distance, neighbor))
 
     # Now check that we actually found the goal node
     if not goal_loc in visited:
-        #print(f"Goal {goal_loc} not reached, taking closest");
+        # print(f"Goal {goal_loc} not reached, taking closest")
 
         # GUIDE: Deal with not being able to get to the goal loc
         #   If the goal location is not reachable, find the node closest to the goal 
         #.  and return the path to it - you'll want this for the ROS 2 assignment
         # YOUR CODE HERE
-        closest_node = None
-        closest_distance = None
-
+        closest = None
+        
         for node in visited:
-            dist_to_goal = np.sqrt((node[0] - goal_loc[0])**2 + (node[1] - goal_loc[1])**2)
-            if closest_node is None or dist_to_goal < closest_distance:
-                closest_node = node
-                closest_distance = dist_to_goal
+            if closest is None or (
+                (node[0]-goal_loc[0])**2 + (node[1]-goal_loc[1])**2 <
+                (closest[0]-goal_loc[0])**2 + (closest[1]-goal_loc[1])**2
+            ):
+                closest = node
 
-        goal_loc = closest_node
+        goal_loc = closest
 
     path = []
-
+    path.append(goal_loc)
     # GUIDE: Build the path by starting at the goal node and working backwards
     # YOUR CODE HERE
-    current_node = goal_loc
-    while current_node is not None:
-        path.append(current_node)
-        current_node = visited[current_node][1]
-
-    path.reverse();
-
+    while goal_loc is not None:
+        path.insert(0, goal_loc)
+        goal_loc = visited[goal_loc][1]
 
     return path
 
